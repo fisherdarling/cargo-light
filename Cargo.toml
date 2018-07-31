@@ -1,0 +1,9 @@
+[package]
+name = "cargo-lighten"
+version = "0.1.0"
+authors = ["Fisher Darling <fdarlingco@gmail.com>"]
+
+[dependencies]
+syn = {version="*", features=["parsing", "printing", "clone-impls", "full", "extra-traits", "visit", "fold"]}
+clap = "*"
+proc-macro2 = {version="*", cfg=["procmacro2_semver_exempt"]}
