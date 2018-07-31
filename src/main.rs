@@ -4,7 +4,7 @@ extern crate proc_macro2;
 extern crate syn;
 extern crate walkdir;
 
-use clap::{App, Arg};
+use clap::{App, Arg, SubCommand};
 use colored::Colorize;
 use syn::{punctuated::Punctuated, token::Or, visit, Ident, ImplItemMethod, ItemFn, Local, Pat};
 use walkdir::{DirEntry, WalkDir};
@@ -214,29 +214,44 @@ fn main() {
         .about("Finds and prints potential usages of shadowed variables.")
         .author("Fisher Darling <fdarlingco@gmail.com")
         .version("0.1.0")
-        .arg(
-            Arg::with_name("files")
-                .short("F")
-                .long("files")
-                .required_unless("dir")
-                .conflicts_with("dir")
-                .takes_value(true)
-                .multiple(true)
-                .help("Files to be parsed."),
-        )
-        .arg(
-            Arg::with_name("dir")
-                .short("d")
-                .long("directory")
-                .conflicts_with("files")
-                .required_unless("files")
-                .multiple(false)
-                .default_value("./src/")
-                .help("Directory to walk and parse."),
+        .bin_name("cargo")
+        .subcommand(
+            SubCommand::with_name("light")
+                .arg(
+                    Arg::with_name("files")
+                        .short("F")
+                        .long("files")
+                        // .required_unless("dir")
+                        // .conflicts_with("dir")
+                        .takes_value(true)
+                        .multiple(true)
+                        .help("Files to be parsed (can accept a glob)."),
+                )
+                .arg(
+                    Arg::with_name("dir")
+                        .short("d")
+                        .long("directory")
+                        // .conflicts_with("files")
+                        .takes_value(true)
+                        // .required_unless("files")
+                        .multiple(false)
+                        // .default_value(".")
+                        .help("Directory to walk and parse."),
+                ),
         )
         .get_matches();
 
-    if let Some(files) = matches.values_of("files") {
+    println!();
+
+    let mut fc = false;
+    let mut dc = false;
+
+    if let Some(files) = matches
+        .subcommand_matches("light")
+        .unwrap()
+        .values_of("files")
+    {
+        fc = true;
         // println!("Parsing files!");
         for file in files {
             // println!("reading {}", file);
@@ -248,9 +263,42 @@ fn main() {
             visit::visit_file(&mut visitor, &syntax);
             print_visitor(visitor);
         }
-    } else if let Some(dir) = matches.value_of("dir") {
+    }
+    if let Some(dir) = matches.subcommand_matches("light").unwrap().value_of("dir") {
+        dc = true;
         // println!("Parsing dir! {}", dir);
         let walker = WalkDir::new(dir).into_iter();
+
+        for file in walker {
+            let file = file.expect("Unable to parse file name.");
+
+            if !is_file_with_ext(&file, "rs") {
+                // Not a .rs file
+                continue;
+            }
+
+            let file = file.path().to_str();
+            // println!("{:?}", file);
+
+            if file.is_none() {
+                eprintln!("Unable to parse a file.");
+                continue;
+            }
+
+            let file = file.unwrap();
+
+            let source = fs::read_to_string(file).unwrap();
+            let syntax = syn::parse_file(&source).expect("Unable to parse file");
+
+            let mut visitor = ShadowCounter::new(file);
+
+            visit::visit_file(&mut visitor, &syntax);
+            print_visitor(visitor);
+        }
+    }
+
+    if !(fc || dc) {
+        let walker = WalkDir::new(".").into_iter();
 
         for file in walker {
             let file = file.expect("Unable to parse file name.");
