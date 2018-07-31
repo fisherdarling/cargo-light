@@ -1,7 +1,11 @@
 [package]
-name = "cargo-lighten"
+name = "cargo-light"
 version = "0.1.0"
 authors = ["Fisher Darling <fdarlingco@gmail.com>"]
+license = "Apache-2.0/MIT"
+readme = "README.md"
+categories = ["command-line-utilities", "development-tools", "development-tools::cargo-plugins", "parsing"]
+keywords = ["cargo", "plugin", "statistics"]
 
 [dependencies]
 syn = {version="*", features=["parsing", "printing", "clone-impls", "full", "extra-traits", "visit", "fold"]}

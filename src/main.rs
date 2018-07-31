@@ -6,16 +6,14 @@ use std::collections::HashMap;
 use std::fs;
 
 use clap::{App, Arg};
-use proc_macro2::LineColumn;
-use proc_macro2::Span;
-use syn::{
-    punctuated::Punctuated, token::Or, visit, Ident, ImplItemMethod, ItemFn, Local, Pat, Type,
-};
+// use proc_macro2::Span;
+use syn::{punctuated::Punctuated, token::Or, visit, Ident, ImplItemMethod, ItemFn, Local, Pat};
 
+#[derive(Default, Clone, PartialEq, Eq)]
 pub struct Case {
     loc: usize,
     // violates_type: bool,
-    is_original: bool,
+    _is_original: bool,
 }
 
 impl std::fmt::Debug for Case {
@@ -25,12 +23,12 @@ impl std::fmt::Debug for Case {
 }
 
 impl Case {
-    fn new(loc: usize, is_original: bool) -> Self {
-        Case { loc, is_original }
+    fn new(loc: usize, _is_original: bool) -> Self {
+        Case { loc, _is_original }
     }
 }
 
-// #[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Count {
     // num: isize,
     locs: Vec<Case>,
@@ -51,18 +49,13 @@ impl Count {
     // }
 }
 
-// #[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Function {
     name: String,
     loc: usize,
     vars: HashMap<Ident, Count>,
     has_shadow: bool,
 }
-
-// #[derive(Debug, Clone, Default)]
-// pub struct LocalFold {
-//     idents: Vec<Ident>,
-// }
 
 impl Function {
     fn new(name: String, loc: usize) -> Self {
@@ -77,21 +70,45 @@ impl Function {
 
 impl std::fmt::Display for Function {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", 5)
+        let vars = &self.vars;
+        let head = format!("  {:>3}, fn {:<15}", self.loc, self.name);
+
+        let mut functions = String::from("");
+        for (key, val) in vars.iter() {
+            // if val.locs.len() == 1 {
+            // write!(fmt,"    {:<15.15}>     X", key.to_string());
+            // } else {
+            if val.locs.len() != 1 {
+                functions += &format!(
+                    "    {:<15.15} {:5} @ {:?}\n",
+                    key.to_string(),
+                    val.locs.len(),
+                    val.locs
+                );
+            }
+        }
+
+        write!(fmt, "{}\n{}", head, functions)
+
+        // fmt.
     }
 }
 
 // #[derive(Default)]
-pub struct ShadowCounter {
+pub struct ShadowCounter<'a> {
     funcs: Vec<Function>,
+    filename: &'a str,
+    has_shadow: bool,
     // max_len: usize,
     // current_func: Option<Ident>,
 }
 
-impl ShadowCounter {
-    fn new() -> Self {
+impl<'a> ShadowCounter<'a> {
+    fn new(filename: &'a str) -> Self {
         ShadowCounter {
+            filename,
             funcs: Vec::new(),
+            has_shadow: false,
             // current_func: None,
         }
     }
@@ -111,7 +128,7 @@ pub fn get_idents(pattern: &Punctuated<Pat, Or>) -> Vec<Ident> {
     return idents;
 }
 
-impl<'ast> visit::Visit<'ast> for ShadowCounter {
+impl<'ast, 'a> visit::Visit<'ast> for ShadowCounter<'a> {
     fn visit_item_fn(&mut self, i: &ItemFn) {
         // println!("{}", i.ident.to_string());
         self.funcs.push(Function::new(
@@ -158,6 +175,7 @@ impl<'ast> visit::Visit<'ast> for ShadowCounter {
 
                 if !is_original {
                     func_counter.has_shadow = true;
+                    self.has_shadow = true;
                 }
 
                 // if let Some((_, ty)) = i.ty {}
@@ -169,41 +187,22 @@ impl<'ast> visit::Visit<'ast> for ShadowCounter {
     }
 }
 
-fn print_counter(counter: ShadowCounter) {
-    let funcs = counter.funcs;
-    // let funcs = counter.funcs;
-
-    for f in funcs {
-        if f.has_shadow {
-            let vars = f.vars;
-            println!(
-                "  {:>3}, {:<15} num vars: {}",
-                f.loc,
-                format!("{} ->", f.name),
-                vars.len()
-            );
-
-            for (key, val) in vars.iter() {
-                if val.locs.len() == 1 {
-                    println!("    {:<15.15}>     X", key.to_string());
-                } else {
-                    println!(
-                        "    {:<15.15}> {:5} @ {:?}",
-                        key.to_string(),
-                        val.locs.len(),
-                        val.locs
-                    );
-                }
+fn print_visitor(counter: ShadowCounter) {
+    if counter.has_shadow {
+        // let funcs = counter.funcs;
+        // let funcs = counter.funcs;
+        println!("{} contains shadowed variable(s):", counter.filename);
+        for f in counter.funcs {
+            if f.has_shadow {
+                println!("{}", f);
             }
-
-            println!();
         }
     }
 }
 
 fn main() {
     let matches = App::new("cargo-light")
-        .about("Finds and prints potential usages of variable shadowing.")
+        .about("Finds and prints potential usages of shadowed variables.")
         .arg(
             Arg::with_name("files")
                 .required(true)
@@ -215,12 +214,14 @@ fn main() {
 
     if let Some(files) = matches.values_of("files") {
         for file in files {
-            println!("reading {}", file);
+            // println!("reading {}", file);
             let source = fs::read_to_string(file).unwrap();
             let syntax = syn::parse_file(&source).expect("Unable to parse file");
-            let mut visitor = ShadowCounter::new();
+
+            let mut visitor = ShadowCounter::new(file);
+
             visit::visit_file(&mut visitor, &syntax);
-            print_counter(visitor);
+            print_visitor(visitor);
         }
     }
     // println!("{:#?}", syntax);
