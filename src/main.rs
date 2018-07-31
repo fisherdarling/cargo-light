@@ -1,13 +1,16 @@
 extern crate clap;
+extern crate colored;
 extern crate proc_macro2;
 extern crate syn;
+extern crate walkdir;
+
+use clap::{App, Arg};
+use colored::Colorize;
+use syn::{punctuated::Punctuated, token::Or, visit, Ident, ImplItemMethod, ItemFn, Local, Pat};
+use walkdir::{DirEntry, WalkDir};
 
 use std::collections::HashMap;
 use std::fs;
-
-use clap::{App, Arg};
-// use proc_macro2::Span;
-use syn::{punctuated::Punctuated, token::Or, visit, Ident, ImplItemMethod, ItemFn, Local, Pat};
 
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Case {
@@ -18,7 +21,7 @@ pub struct Case {
 
 impl std::fmt::Debug for Case {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", self.loc)
+        write!(fmt, "{}", self.loc.to_string().yellow())
     }
 }
 
@@ -71,7 +74,12 @@ impl Function {
 impl std::fmt::Display for Function {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         let vars = &self.vars;
-        let head = format!("  {:>3}, fn {:<15}", self.loc, self.name);
+        let head = format!(
+            "  {} {:>3} {:<15}",
+            "line:".bright_magenta(),
+            self.loc.to_string().bright_magenta(),
+            self.name.bright_green()
+        );
 
         let mut functions = String::from("");
         for (key, val) in vars.iter() {
@@ -80,9 +88,10 @@ impl std::fmt::Display for Function {
             // } else {
             if val.locs.len() != 1 {
                 functions += &format!(
-                    "    {:<15.15} {:5} @ {:?}\n",
-                    key.to_string(),
-                    val.locs.len(),
+                    "    {:<15.15} {:>5} {} {:?}\n",
+                    key.to_string().bright_white().bold(),
+                    val.locs.len().to_string().bright_cyan(),
+                    "@".dimmed(),
                     val.locs
                 );
             }
@@ -191,7 +200,7 @@ fn print_visitor(counter: ShadowCounter) {
     if counter.has_shadow {
         // let funcs = counter.funcs;
         // let funcs = counter.funcs;
-        println!("{} contains shadowed variable(s):", counter.filename);
+        println!("{} contains shadowed variable(s):\n", counter.filename);
         for f in counter.funcs {
             if f.has_shadow {
                 println!("{}", f);
@@ -203,16 +212,32 @@ fn print_visitor(counter: ShadowCounter) {
 fn main() {
     let matches = App::new("cargo-light")
         .about("Finds and prints potential usages of shadowed variables.")
+        .author("Fisher Darling <fdarlingco@gmail.com")
+        .version("0.1.0")
         .arg(
             Arg::with_name("files")
-                .required(true)
+                .short("F")
+                .long("files")
+                .required_unless("dir")
+                .conflicts_with("dir")
                 .takes_value(true)
                 .multiple(true)
-                .help("Files to be checked."),
+                .help("Files to be parsed."),
+        )
+        .arg(
+            Arg::with_name("dir")
+                .short("d")
+                .long("directory")
+                .conflicts_with("files")
+                .required_unless("files")
+                .multiple(false)
+                .default_value("./src/")
+                .help("Directory to walk and parse."),
         )
         .get_matches();
 
     if let Some(files) = matches.values_of("files") {
+        // println!("Parsing files!");
         for file in files {
             // println!("reading {}", file);
             let source = fs::read_to_string(file).unwrap();
@@ -223,6 +248,54 @@ fn main() {
             visit::visit_file(&mut visitor, &syntax);
             print_visitor(visitor);
         }
+    } else if let Some(dir) = matches.value_of("dir") {
+        // println!("Parsing dir! {}", dir);
+        let walker = WalkDir::new(dir).into_iter();
+
+        for file in walker {
+            let file = file.expect("Unable to parse file name.");
+
+            if !is_file_with_ext(&file, "rs") {
+                // Not a .rs file
+                continue;
+            }
+
+            let file = file.path().to_str();
+            // println!("{:?}", file);
+
+            if file.is_none() {
+                eprintln!("Unable to parse a file.");
+                continue;
+            }
+
+            let file = file.unwrap();
+
+            let source = fs::read_to_string(file).unwrap();
+            let syntax = syn::parse_file(&source).expect("Unable to parse file");
+
+            let mut visitor = ShadowCounter::new(file);
+
+            visit::visit_file(&mut visitor, &syntax);
+            print_visitor(visitor);
+        }
     }
     // println!("{:#?}", syntax);
+}
+
+// Taken from cargo-geiger
+// Copyright (c) 2018 Simon Heath
+// Copyright (c) 2015-2016 Steven Fackler
+fn is_file_with_ext(entry: &DirEntry, file_ext: &str) -> bool {
+    if !entry.file_type().is_file() {
+        return false;
+    }
+    let p = entry.path();
+    let ext = match p.extension() {
+        Some(e) => e,
+        None => return false,
+    };
+    // to_string_lossy is ok since we only want to match against an ASCII
+    // compatible extension and we do not keep the possibly lossy result
+    // around.
+    ext.to_string_lossy() == file_ext
 }

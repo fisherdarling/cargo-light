@@ -7,7 +7,12 @@ readme = "README.md"
 categories = ["command-line-utilities", "development-tools", "development-tools::cargo-plugins", "parsing"]
 keywords = ["cargo", "plugin", "statistics"]
 
+[badges]
+maintenance = { status = "experimental" }
+
 [dependencies]
 syn = {version="*", features=["parsing", "printing", "clone-impls", "full", "extra-traits", "visit", "fold"]}
 clap = "*"
-proc-macro2 = {version="*", cfg=["procmacro2_semver_exempt"]}
+proc-macro2 = {version="*"}
+colored = "*"
+walkdir = "2"
