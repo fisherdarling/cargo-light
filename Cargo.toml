@@ -1,11 +1,11 @@
 [package]
 name = "cargo-light"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Fisher Darling <fdarlingco@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 categories = ["command-line-utilities", "development-tools", "development-tools::cargo-plugins", "parsing"]
-keywords = ["cargo-subcommand", "plugin", "statistics"]
+keywords = ["cargo-subcommand", "plugin", "shadow", "variables"]
 
 [badges]
 maintenance = { status = "experimental" }
@@ -13,20 +13,9 @@ maintenance = { status = "experimental" }
 [[bin]]
 name = "cargo-light"
 
-# [[bin]]
-# name="light"
-# path="./src/main.rs"
-
 [dependencies]
 syn = {version="*", features=["parsing", "printing", "clone-impls", "full", "extra-traits", "visit", "fold"]}
 clap = "*"
-proc-macro2 = "*"
 colored = "*"
 walkdir = "2"
-
-# [dependencies.proc-macro2]
-# version = "*"
-# features = "procmacro2_semver_exempt"
-
-# [dependencies.proc-macro2]
-# rustflags = "--cfg procmacro2_semver_exempt"
+proc-macro2 = "*"

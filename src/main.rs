@@ -15,44 +15,45 @@ use std::fs;
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Case {
     loc: usize,
+    // TODO: Figure out how to get the matched types.
     // violates_type: bool,
-    _is_original: bool,
+    is_original: bool,
 }
 
 impl std::fmt::Debug for Case {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", self.loc.to_string().yellow())
+        let loc = self.loc.to_string();
+        let to_write: String;
+
+        if self.is_original {
+            // .to_string() required for the type annotation on to_write above.
+            to_write = loc.cyan().to_string();
+        } else {
+            to_write = loc.yellow().to_string();
+        }
+
+        write!(fmt, "{}", to_write)
     }
 }
 
 impl Case {
-    fn new(loc: usize, _is_original: bool) -> Self {
-        Case { loc, _is_original }
+    fn new(loc: usize, is_original: bool) -> Self {
+        Case { loc, is_original }
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Count {
-    // num: isize,
     locs: Vec<Case>,
-    // prev_type: Option<Type>,
 }
 
 impl Count {
     fn new() -> Self {
-        Count {
-            // num: n,
-            locs: Vec::new(),
-            // prev_type: None,
-        }
+        Count { locs: Vec::new() }
     }
-
-    // fn from_type(t: Type) -> Self {
-
-    // }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Function {
     name: String,
     loc: usize,
@@ -83,14 +84,11 @@ impl std::fmt::Display for Function {
 
         let mut functions = String::from("");
         for (key, val) in vars.iter() {
-            // if val.locs.len() == 1 {
-            // write!(fmt,"    {:<15.15}>     X", key.to_string());
-            // } else {
             if val.locs.len() != 1 {
                 functions += &format!(
                     "    {:<15.15} {:>5} {} {:?}\n",
                     key.to_string().bright_white().bold(),
-                    val.locs.len().to_string().bright_cyan(),
+                    val.locs.len().to_string().bright_cyan().bold(),
                     "@".dimmed(),
                     val.locs
                 );
@@ -98,18 +96,14 @@ impl std::fmt::Display for Function {
         }
 
         write!(fmt, "{}\n{}", head, functions)
-
-        // fmt.
     }
 }
 
-// #[derive(Default)]
+#[derive(Default)]
 pub struct ShadowCounter<'a> {
     funcs: Vec<Function>,
     filename: &'a str,
     has_shadow: bool,
-    // max_len: usize,
-    // current_func: Option<Ident>,
 }
 
 impl<'a> ShadowCounter<'a> {
@@ -118,18 +112,21 @@ impl<'a> ShadowCounter<'a> {
             filename,
             funcs: Vec::new(),
             has_shadow: false,
-            // current_func: None,
         }
     }
 }
-pub fn get_idents(pattern: &Punctuated<Pat, Or>) -> Vec<Ident> {
+
+/// Gets the identifiers from a Punctuated pattern.
+/// Doesn't yet work as intended. Can only get a single identifer, like:
+/// let a = 5; Will not work with let (a, b) = 5;
+fn get_idents(pattern: &Punctuated<Pat, Or>) -> Vec<Ident> {
     let mut idents = Vec::<Ident>::new();
     for p in pattern {
         match p {
             Pat::Ident(i) => {
-                if i.by_ref.is_none() {
-                    idents.push(i.ident.clone());
-                }
+                // if i.by_ref.is_none() {
+                idents.push(i.ident.clone());
+                // }
             }
             _ => continue,
         }
@@ -161,11 +158,15 @@ impl<'ast, 'a> visit::Visit<'ast> for ShadowCounter<'a> {
     fn visit_local(&mut self, i: &Local) {
         // println!("{:?}", i);
 
+        // Get the possible identifiers.
         let ids = get_idents(&i.pats);
         {
+            // Because the tree is traversed function first and then its local bindings,
+            // the last_mut() of the vec of functions is the surrounding scope of the current
+            // local binding. Therefore, the last function contains the identifier map.
             let func_counter: Option<&mut Function> = self.funcs.last_mut();
-            // .expect("Cannot have a local without a function.");
 
+            // Every local binding should be within a function/impl method (?).
             if func_counter.is_none() {
                 panic!(
                     "Local without a function? line: {}",
@@ -173,7 +174,7 @@ impl<'ast, 'a> visit::Visit<'ast> for ShadowCounter<'a> {
                 );
             }
 
-            let func_counter = func_counter.unwrap(); // Guarenteed to not crash here.
+            let func_counter = func_counter.unwrap(); // Guaranteed to not crash here.
 
             for i in ids {
                 let line = i.span().start().line;
@@ -186,33 +187,27 @@ impl<'ast, 'a> visit::Visit<'ast> for ShadowCounter<'a> {
                     func_counter.has_shadow = true;
                     self.has_shadow = true;
                 }
-
-                // if let Some((_, ty)) = i.ty {}
             }
         }
 
         visit::visit_local(self, i);
-        // self
     }
 }
 
 fn print_visitor(counter: ShadowCounter) {
-    if counter.has_shadow {
-        // let funcs = counter.funcs;
-        // let funcs = counter.funcs;
-        println!("{} contains shadowed variable(s):\n", counter.filename);
-        for f in counter.funcs {
-            if f.has_shadow {
-                println!("{}", f);
-            }
+    println!("{} contains shadowed variable(s):\n", counter.filename);
+    for f in counter.funcs {
+        if f.has_shadow {
+            println!("{}", f);
         }
     }
 }
 
 fn main() {
+    // println!("{}", Startom)
     let matches = App::new("cargo-light")
         .about("Finds and prints potential usages of shadowed variables.")
-        .author("Fisher Darling <fdarlingco@gmail.com")
+        .author("Fisher Darling <fdarlingco@gmail.com>")
         .version("0.1.0")
         .bin_name("cargo")
         .subcommand(
@@ -221,8 +216,6 @@ fn main() {
                     Arg::with_name("files")
                         .short("F")
                         .long("files")
-                        // .required_unless("dir")
-                        // .conflicts_with("dir")
                         .takes_value(true)
                         .multiple(true)
                         .help("Files to be parsed (can accept a glob)."),
@@ -231,30 +224,19 @@ fn main() {
                     Arg::with_name("dir")
                         .short("d")
                         .long("directory")
-                        // .conflicts_with("files")
                         .takes_value(true)
-                        // .required_unless("files")
                         .multiple(false)
-                        // .default_value(".")
                         .help("Directory to walk and parse."),
                 ),
         )
         .get_matches();
-
-    println!();
-
-    let mut fc = false;
-    let mut dc = false;
 
     if let Some(files) = matches
         .subcommand_matches("light")
         .unwrap()
         .values_of("files")
     {
-        fc = true;
-        // println!("Parsing files!");
         for file in files {
-            // println!("reading {}", file);
             let source = fs::read_to_string(file).unwrap();
             let syntax = syn::parse_file(&source).expect("Unable to parse file");
 
@@ -263,10 +245,12 @@ fn main() {
             visit::visit_file(&mut visitor, &syntax);
             print_visitor(visitor);
         }
-    }
-    if let Some(dir) = matches.subcommand_matches("light").unwrap().value_of("dir") {
-        dc = true;
-        // println!("Parsing dir! {}", dir);
+    } else if let Some(dir) = matches
+        .subcommand_matches("light")
+        .unwrap()
+        .value_of("dir")
+        .or(Some("."))
+    {
         let walker = WalkDir::new(dir).into_iter();
 
         for file in walker {
@@ -288,51 +272,28 @@ fn main() {
             let file = file.unwrap();
 
             let source = fs::read_to_string(file).unwrap();
-            let syntax = syn::parse_file(&source).expect("Unable to parse file");
+            let syntax = syn::parse_file(&source);
 
-            let mut visitor = ShadowCounter::new(file);
-
-            visit::visit_file(&mut visitor, &syntax);
-            print_visitor(visitor);
-        }
-    }
-
-    if !(fc || dc) {
-        let walker = WalkDir::new(".").into_iter();
-
-        for file in walker {
-            let file = file.expect("Unable to parse file name.");
-
-            if !is_file_with_ext(&file, "rs") {
-                // Not a .rs file
+            if syntax.is_err() {
+                eprintln!("{}: {}\n", "Unable to parse".red(), file);
                 continue;
             }
 
-            let file = file.path().to_str();
-            // println!("{:?}", file);
-
-            if file.is_none() {
-                eprintln!("Unable to parse a file.");
-                continue;
-            }
-
-            let file = file.unwrap();
-
-            let source = fs::read_to_string(file).unwrap();
-            let syntax = syn::parse_file(&source).expect("Unable to parse file");
-
+            let syntax = syntax.unwrap();
             let mut visitor = ShadowCounter::new(file);
-
             visit::visit_file(&mut visitor, &syntax);
-            print_visitor(visitor);
+
+            if visitor.has_shadow {
+                print_visitor(visitor);
+            }
         }
     }
-    // println!("{:#?}", syntax);
 }
 
 // Taken from cargo-geiger
-// Copyright (c) 2018 Simon Heath
 // Copyright (c) 2015-2016 Steven Fackler
+// Copyright (c) 2018 Simon Heath
+// Licensed under the MIT License.
 fn is_file_with_ext(entry: &DirEntry, file_ext: &str) -> bool {
     if !entry.file_type().is_file() {
         return false;
