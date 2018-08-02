@@ -32,7 +32,7 @@ As this is a cargo subcommand, cargo must be installed on the system. The binary
 First clone the repository:
 
 ```
-git clone https://github.com/harpo109/cargo-light.git
+git clone https://github.com/fisherdarling/cargo-light.git
 ```
 
 Move into the folder and install it (\*):
