@@ -5,12 +5,12 @@ cargo light is a tool to that finds and counts shadowed variables in valid rust 
 Example:
 
 ```rust
-// A immutable variable.
+// An immutable variable.
 let res: Result<usize, some::Error> = Ok(10);
 // "mutate" and change it's type to make the code easier to follow:
 let res: usize = res.unwrap();
 // Now res is a different type but has the same name.
-// This isn't neccessarily bad, but it can sometimes
+// This isn't necessarily bad, but it can sometimes
 // lead to confusion in large functions.
 println!("{}", res);
 ```
@@ -53,7 +53,7 @@ cargo light -h
 ## TODO:
 
 - Learn how to correctly parse a pattern type that's more than just `let a = 5;`
-- Learn how to match an identifer to a type. This would required some sort of iterator that matches over the left pattern with the right pattern(?) at the same time i.e:
+- Learn how to match an identifier to a type. This would require some sort of iterator that matches over the left pattern with the right pattern(?) at the same time i.e:
 
   ```rust
   let (a, b): (i32, usize) = (12, 4);
@@ -78,3 +78,4 @@ This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.
 
 - The code is heavily based off of [cargo-geiger](https://github.com/anderejd/cargo-geiger) and [cargo-osha](https://github.com/icefoxen/cargo-osha). A big thanks to the contributors of those projects!
 - Another big thanks to the writers of my dependencies. The api for `colored`, and `syn` were really nice!
+
